@@ -1,6 +1,4 @@
 
-// import { transform } from 'babel';
-
 
 function functionExpressionDecorator(functionExpression, t) {
   return {

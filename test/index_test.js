@@ -3,7 +3,7 @@ if (process.env.TEST_RELEASE) {
   moduleRoot = '../dist';
 }
 
-import { transform, parse } from 'babel';
+import { transform } from 'babel';
 
 const babelPluginKeepFlow = require(moduleRoot);
 const Module = module.constructor;
