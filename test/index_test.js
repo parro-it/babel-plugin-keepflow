@@ -3,7 +3,7 @@ if (process.env.TEST_RELEASE) {
   moduleRoot = '../dist';
 }
 
-import { transform } from 'babel';
+import { transform, parse } from 'babel';
 
 const babelPluginKeepFlow = require(moduleRoot);
 const Module = module.constructor;
@@ -19,11 +19,13 @@ const check = (source, expectedMeta, namedExport = null) => () => {
   const result = transform(source, {
     plugins: babelPluginKeepFlow
   });
-
   let test = requireFromString(result.code, __filename);
-  if (namedExport) {
+  if (typeof namedExport === 'string') {
     test = test[namedExport];
+  } else if (typeof namedExport === 'function') {
+    test = namedExport(test);
   }
+
 
   test.__meta.should.be.deep.equal(expectedMeta);
 };
@@ -147,6 +149,43 @@ describe('babelPluginKeepFlow', () => {
         type: 'boolean'
       }
     }
+  ));
+
+
+  it('support object methods', check(
+    'export const obj = { testFun(): boolean {} };',
+    {
+      arguments: [],
+      returnType: {
+        type: 'boolean'
+      }
+    },
+    m => m.obj.testFun
+  ));
+
+  it('support object methods as function expression', check(
+    'export const obj = { testFun: function(): boolean {} };',
+    {
+      arguments: [],
+      returnType: {
+        type: 'boolean'
+      }
+    },
+    m => m.obj.testFun
+  ));
+
+  it('support untyped object methods as function expression', check(
+    'export const obj = { testFun: function(a) {} };',
+    {
+      arguments: [{
+          name: 'a',
+          type: 'any'
+        }],
+      returnType: {
+        type: 'any'
+      }
+    },
+    m => m.obj.testFun
   ));
 
   it('support function export syntax', check(
