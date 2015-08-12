@@ -16,18 +16,24 @@ function requireFromString(src, filename) {
 }
 
 const check = (source, expectedMeta, namedExport = null) => () => {
-  const result = transform(source, {
-    plugins: babelPluginKeepFlow
-  });
-  let test = requireFromString(result.code, __filename);
-  if (typeof namedExport === 'string') {
-    test = test[namedExport];
-  } else if (typeof namedExport === 'function') {
-    test = namedExport(test);
+  try {
+    const result = transform(source, {
+      plugins: babelPluginKeepFlow
+    });
+
+    //console.log('done ',result.code)
+    let test = requireFromString(result.code, __filename);
+    if (typeof namedExport === 'string') {
+      test = test[namedExport];
+    } else if (typeof namedExport === 'function') {
+      test = namedExport(test);
+    }
+
+    test.__meta.should.be.deep.equal(expectedMeta);
+  } catch(err) {
+    process.stderr.write(err.stack);
+    throw err;
   }
-
-
-  test.__meta.should.be.deep.equal(expectedMeta);
 };
 
 describe('babelPluginKeepFlow', () => {
@@ -161,6 +167,56 @@ describe('babelPluginKeepFlow', () => {
       }
     },
     m => m.obj.testFun
+  ));
+
+  it('support class methods', check(
+    'export class Clazz { testFun(a: number): boolean {} }',
+    {
+      arguments: [{
+        name: 'a',
+        type: 'number'
+      }],
+      returnType: {
+        type: 'boolean'
+      }
+    },
+    m => new m.Clazz().testFun
+  ));
+
+  it('support static class methods', check(
+    'export class Clazz { static testFun(a: number): boolean {} }',
+    {
+      arguments: [{
+        name: 'a',
+        type: 'number'
+      }],
+      returnType: {
+        type: 'boolean'
+      }
+    },
+    m => m.Clazz.testFun
+  ));
+
+  it('support constructor with separated export', check(
+    'class Clazz { a(){} \n constructor(a:number) {} }\n export default Clazz;',
+    {
+      arguments: [{
+        name: 'a',
+        type: 'number'
+      }]
+    },
+    m => m
+  ));
+
+  it('support constructor', check(
+    'export class Clazz { a(){} \n constructor(a:number) {} }',
+    {
+      arguments: [{
+        name: 'a',
+        type: 'number'
+      }]
+    },
+    m => m.Clazz
   ));
 
   it('support object methods as function expression', check(

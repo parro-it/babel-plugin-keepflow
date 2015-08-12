@@ -1,7 +1,10 @@
 
 
 function functionExpressionDecorator(functionExpression, t) {
-  return {
+  if (functionExpression.__meta.isConstructor) {
+    return functionExpression;
+  }
+  const ret = {
     type: 'ExpressionStatement',
     expression: {
       type: 'CallExpression',
@@ -58,6 +61,7 @@ function functionExpressionDecorator(functionExpression, t) {
       arguments: []
     }
   };
+  return ret;
 }
 
 function valueToMetaAssignment(name, meta) {
@@ -86,7 +90,9 @@ function valueToMetaAssignment(name, meta) {
 function mkTypeVisitor(resultType) {
   return {
     exit: node => {
-      node.__metaArg.type = resultType;
+      if (node.__metaArg) {
+        node.__metaArg.type = resultType;
+      }
     }
   };
 }
@@ -95,7 +101,7 @@ function mkTypeVisitor(resultType) {
 function mkExportVisitor(t) {
   return {
     exit(node) {
-      if (node.declaration.type === 'FunctionDeclaration') {
+      if (node.declaration.type === 'FunctionDeclaration' || node.declaration.type === 'ClassDeclaration') {
         return [
           node,
           valueToMetaAssignment(node.declaration.id.name, t.valueToNode(node.declaration.__meta))
@@ -105,13 +111,18 @@ function mkExportVisitor(t) {
   };
 }
 
-function mkFunctionEnter(node) {
+function mkFunctionEnter(node, parent) {
   node.__meta = node.__meta || {
     arguments: [],
     returnType: {
       type: 'any'
     }
   };
+
+  if (parent.kind === 'constructor') {
+    delete node.__meta.returnType;
+    node.__meta.isConstructor = true;
+  }
 
   if (node.returnType) {
     node.returnType.typeAnnotation.__metaArg = node.__meta.returnType;
@@ -153,7 +164,26 @@ export default function babelPluginKeepFlow({ Plugin, types: t }) {
           }
         }
       },
-
+      ClassDeclaration: {
+        exit(node, parent) {
+          const constructorAst = node.body.body.filter(m => m.kind === 'constructor');
+          if (constructorAst.length > 0) {
+            delete constructorAst[0].value.__meta.isConstructor;
+            if (parent.type !== 'ExportDefaultDeclaration' && parent.type !== 'ExportNamedDeclaration') {
+              const metaAssignment = valueToMetaAssignment(
+                node.id.name,
+                t.valueToNode(constructorAst[0].value.__meta)
+              );
+              return [
+                node,
+                metaAssignment
+              ];
+            }
+            node.__meta = constructorAst[0].value.__meta;
+            delete constructorAst[0].value.__meta;
+          }
+        }
+      },
       FunctionExpression: {
         enter: mkFunctionEnter,
         exit(node) {
@@ -162,6 +192,7 @@ export default function babelPluginKeepFlow({ Plugin, types: t }) {
       },
       ExportNamedDeclaration: mkExportVisitor(t),
       ExportDefaultDeclaration: mkExportVisitor(t)
+
     }
   });
 }
