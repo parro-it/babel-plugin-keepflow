@@ -21,7 +21,6 @@ const check = (source, expectedMeta, namedExport = null) => () => {
       plugins: babelPluginKeepFlow
     });
 
-    //console.log('done ',result.code)
     let test = requireFromString(result.code, __filename);
     if (typeof namedExport === 'string') {
       test = test[namedExport];
